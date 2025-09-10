@@ -1,6 +1,6 @@
-from typing import Dict, List
+from typing import Dict, List, Set
 
-from Demographic import Demographic
+# from Demographic import Demographic
 
 '''
 Every area in the nation has at least two descriptors: one base for the nation itself, and one for the state it is in.
@@ -15,14 +15,47 @@ In this case, "demographic" in the county will have a percentage membership of 0
 Any given county is likely to have many more descriptors than this.
 
 '''
+
+DESCRIPTORS_MAX = 1000
+
 class Descriptor:
 
-    def __init__(self, name: str, effects: Dict[Demographic, float], eliminatiable = True):
+    def __init__(self, name: str, effects: Dict[str, float] | None = None, fixed: bool = False):
         self.name: str = name
-        self.effects: Dict[Demographic, float] = effects
-        descriptors.append(self)
+        self.effects: Dict[str, float] = {} if effects is None else effects
+        add_demographics(*[_ for _ in self.effects.keys()])
+        for demographic in demographics:
+            self.effects.setdefault(demographic, 0.0)
+        self.fixed: bool = fixed
+        descriptors.add(self)
     
-    def effect_on(self, demographic: Demographic) -> float:
+    def effect_on(self, demographic: str) -> float:
         return self.effects[demographic]
+    
+    def fill_effects(self):
+        for demographic in demographics:
+            if demographic not in self.effects:
+                self.effects[demographic] = 0.0
+    
+    def __hash__(self) -> int:
+        return hash(self.name) + sum([hash(_) for _ in self.effects])
+    
+    def __eq__(self, other) -> bool:
+        return type(self) == type(other) and \
+               self.name == other.name and \
+               self.effects == other.effects
+    
+    def __str__(self) -> str:
+        nonzeroes = {effect: self.effects[effect] for effect in self.effects if self.effects[effect]}
+        return f"{self.name}: {nonzeroes}"
 
-descriptors: List[Descriptor] = []
+descriptors: Set[Descriptor] = set()
+
+demographics: List[str] = []
+
+def add_demographics(*d: str) -> List[str]:
+    global demographics
+    for demographic in d:
+        if demographic not in demographics:
+            demographics.append(demographic)
+    return demographics
