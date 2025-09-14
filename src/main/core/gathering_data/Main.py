@@ -4,12 +4,15 @@ from bs4 import BeautifulSoup
 from bs4.element import PageElement, Tag
 import os
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+import shutil
 
 from Paths import *
 from Nation import Nation
 from State import State
 from County import County
-from page_reader import get_soup, identify_states, identify_counties
+from page_reader import get_soup, identify_states, identify_counties, fetch_and_save
 from MapEntityFactory import create_all_counties_from_files, create_all_counties_in_state_from_files, create_state_from_files, create_county_from_files, create_nation_from_files
 
 
@@ -51,6 +54,16 @@ def webpages_to_files():
                 with open(state_folder + "\\" + page + ".html", 'w', encoding='utf-8') as out:
                     out.write(soup.prettify())
 
+        # state_tasks = []
+        # with ThreadPoolExecutor(max_workers=1) as executor:
+        #     for page in pages:
+        #         filepath = state_folder + "\\" + page + ".html"
+        #         if not os.path.exists(filepath):
+        #             url = link.replace("Overview", page)
+        #             state_tasks.append(executor.submit(fetch_and_save, url, filepath))
+        #     for future in as_completed(state_tasks):
+        #         future.result()
+
         counties_links = identify_counties(link)
         for c_link in counties_links:
             county_page_name = c_link.split("/")[-2]
@@ -65,9 +78,18 @@ def webpages_to_files():
             except OSError as e:
                 print(str(e))
 
+            # county_tasks = []
+            # for page in pages:
+            #     filepath = county_folder + "\\" + page + ".html"
+            #     if not os.path.exists(filepath):
+            #         url = c_link.replace("Overview", page)
+            #         county_tasks.append(executor.submit(fetch_and_save, url, filepath))
+            # for future in as_completed(county_tasks):
+            #     future.result()
+
             for page in pages:
                 if not os.path.exists(county_folder + "\\" + page + ".html"):
-                    c_soup = get_soup(link.replace("Overview", page))
+                    c_soup = get_soup(c_link.replace("Overview", page))
                     with open(county_folder + "\\" + page + ".html", 'w', encoding='utf-8') as out:
                         out.write(c_soup.prettify())
 
@@ -99,13 +121,7 @@ def combine_jsons():
 def list_states() -> List[str]:
     return [state for state in os.listdir(DATA_DIR) if "." not in state]
 
-def main() -> None:
-
-    # webpages_to_files()
-
-    # convert_html_json_files()
-    
-
+def convert_html_json_files():
     if not os.path.exists(f"{RESOURCES_DIR}\\nation.json"):
         print("NATION ===========================")
         nation = create_nation_from_files()
@@ -114,16 +130,17 @@ def main() -> None:
             out.write(json.dumps(nation_json, indent=4, separators=(", "," : ")))
 
     for state_name in os.listdir(f"{DATA_DIR}"):
-        if not "." in state_name and not os.path.exists(f"{RESOURCES_DIR}\\{state_name}\\{state_name}.json"):
+        if '.' not in state_name:
             print(state_name + " ------------------------------")
             state = create_state_from_files(state_name)
-            try:
-                os.mkdir(f"{RESOURCES_DIR}\\{state_name}")
-            except OSError:
-                pass
-            with open(f"{RESOURCES_DIR}\\{state_name}\\{state_name}.json",'w',encoding='utf-8') as out:
-                state_json = state.to_json()
-                out.write(json.dumps(state_json, indent=4, separators=(", "," : ")))
+            if not os.path.exists(f"{RESOURCES_DIR}\\{state_name}\\{state_name}.json"):
+                try:
+                    os.mkdir(f"{RESOURCES_DIR}\\{state_name}")
+                except OSError:
+                    pass
+                with open(f"{RESOURCES_DIR}\\{state_name}\\{state_name}.json",'w',encoding='utf-8') as out:
+                    state_json = state.to_json()
+                    out.write(json.dumps(state_json, indent=4, separators=(", "," : ")))
             for county_name in os.listdir(f"{DATA_DIR}\\{state_name}\\counties"):
                 if not "." in county_name and not os.path.exists(f"{RESOURCES_DIR}\\{state_name}\\counties\\{county_name}.json"):
                     print(county_name)
@@ -135,116 +152,103 @@ def main() -> None:
                     with open(f"{RESOURCES_DIR}\\{state_name}\\counties\\{county_name}.json",'w',encoding='utf-8') as out:
                         county_json = county.to_json()
                         out.write(json.dumps(county_json, indent=4, separators=(", "," : ")))
-                
-            # counties: List[County] = create_all_counties_in_state_from_files(state_name)
-            # print("made counties")
-            # state: State = counties[0].state
-            # with open(f"{DATA_DIR}\\{state_name}\\data.json", 'w', encoding='utf-8') as file:
-            #     counties_jsons = [county.to_json() for county in counties]
-            #     state_json = state.to_json()
-            #     state_json['counties'] = counties_jsons
-            #     file.write(json.dumps(state_json, indent=4, separators=(", "," : ")))
 
-    # combine_jsons()
-        
+def count_counties():
+    for state_name in [_ for _ in os.listdir(f"{RESOURCES_DIR}") if '.' not in _]:
+        counties_count = len([_ for _ in os.listdir(f"{RESOURCES_DIR}\\{state_name}\\counties")])
+        print(f"{state_name} has {counties_count} counties")
 
-    # Identify counties and get demographics
-    # counties: Dict[State, List[County]] = dict.fromkeys(states, [])
-    # for state in states:
-    #     # print(f"Finding counties: {state.name}")
-    #     counties[state] = identify_counties(state.get_link(), state, COUNTIES_READ_LIMIT)
-    #     for county in counties[state]:
-    #         print(str(county))
-    # for state in states:
-    #     print(f"# Counties in {state.name}: {len(counties[state])}")
-    # print("Total counties: " + str(len([county for state in counties for county in counties[state]])))
-
-    # for state in states:
-    #     counties_pop_sum = 0
-    #     counties_demographics = {}
-    #     for county in counties[state]:
-    #         counties_pop_sum += county.population
-    #     print("Population of " + state.name)
-    #     print("Counties pops: " + str(counties_pop_sum))
-    #     print("State pop:     " + str(state.population))
-
-
+unremovable_files: List[str] = []
+def verify_data():
+    global unremovable_files
+    ''' Deletes all data files which contain a rate limit message. '''
+    for file in list_files_recursive(DATA_DIR):
+        print("Verifying: " + file)
+        remove_file = False
+        with open(file) as data:
+            if "Too many requests" in data.readline():
+                print("BAD FILE: " + file)
+                remove_file = True
+        if remove_file:
+            for _ in range(10):
+                try:
+                    os.chmod(file, 0o777)
+                    os.remove(file)
+                    print("REMOVED: " + file)
+                    break
+                except PermissionError:
+                    time.sleep(0.1)
+            else:
+                print("UNABLE TO REMOVE: " + file)
+                unremovable_files.append(file)
+    print("Files which could not be removed:")
+    for file in unremovable_files:
+        print(file)
 
 
+def validate_json():
+    bad_files: List[str] = []
+    required_lines = ["name", "population", "demographics", "race_and_ethnicity", "age_and_sex", "household_types", "marital_status", "employment_status", "industries", "educational_attainment"]
+    for file in list_files_recursive(RESOURCES_DIR):
+        has_required: List[bool] = [False for _ in required_lines]
+        content: List[str] = []
+        with open(file, 'r', encoding='utf-8') as data:
+            content = data.readlines()
+        for i, required_line in enumerate(required_lines):
+            for line in content[i:]:
+                if required_line in line:
+                    has_required[i] = True
+                    break
+        if False in has_required:
+            bad_files.append(file)
+            print(f"{file} is BAD ------------------------------")
+        else:
+            print(f"{file} is good")
+    print("Bad files:")
+    for file in bad_files:
+        print(file)
 
+def list_files_recursive(root_dir: str, files = None) -> List[str]:
+    if files is None:
+        files = []
+    for path in os.listdir(root_dir):
+        if '.' in path: # File
+            files.append(root_dir + "\\" + path)
+        else:
+            for file in list_files_recursive(root_dir + "\\" + path):
+                files.append(file)
+    return files
 
+def add_states_to_jsons():
+    for state_dir in os.listdir(RESOURCES_DIR):
+        if '.' in state_dir:
+            continue
+        state_name = state_dir.replace("_"," ").title()
+        for county_file in os.listdir(f"{RESOURCES_DIR}\\{state_dir}\\counties"):
+            content: List[str] = []
+            with open(f"{RESOURCES_DIR}\\{state_dir}\\counties\\{county_file}",'r') as data:
+                content = data.readlines()
+            for i, line in enumerate(content):
+                if "\"name\"" in line:
+                    content.insert(i+1, f"\t\"state\" : \"{state_name}\", \n")
+                    break
+            with open(f"{RESOURCES_DIR}\\{state_dir}\\counties\\{county_file}","w") as data:
+                for line in content:
+                    data.write(line)
 
+def main() -> None:
 
+    # webpages_to_files()
 
+    # verify_data()
 
+    # convert_html_json_files()
 
+    # validate_json()
 
+    # count_counties()
 
-
-    # exit()
-
-    # soup = get_soup("https://statisticalatlas.com/county/Alabama/Autauga-County/Race-and-Ethnicity")
-    # selector = "#figure\\/race-and-ethnicity > div.figure-contents > svg > g"
-    # graphic = soup.select(selector)[0]
-    # inner_graphics = graphic.select("g")
-    # with open("logs\\log.out",'w') as file:
-    #     for inner_graphic in inner_graphics:
-    #         file.write(inner_graphic.prettify() + "\n")
-
-    # race_ethnicity_labels: List[str] = []
-    # for inner in inner_graphics:
-    #     if "font-style=\"normal\"" in inner.prettify():
-    #         race_ethnicity_labels.append(inner.get_text())
-    # print(race_ethnicity_labels)
-
-    # race_ethnicity_values: List[float] = []
-    # for inner in inner_graphics:
-    #     if "<g>\n <title>" in inner.prettify():
-    #         value = inner.find_all("title")[0].get_text()
-    #         if '%' in value:
-    #             float_value = percent_to_float(value)
-    #             if float_value:
-    #                 race_ethnicity_values.append(float_value)
-    # print(race_ethnicity_values)
-
-
-
-
-    # exit()
-    # counties: Dict[State, List[County]] = dict.fromkeys(states, [])
-    # for state in states:
-    #     print(f"Finding counties: {state.name}")
-    #     counties[state] = identify_counties(state.get_link(), state)
-    # for state in counties:
-    #     for county in counties[state]:
-    #         print(county.get_name_with_state())
-    # print("Total counties: " + str(len([county for state in counties for county in counties[state]])))
-    
-    # links: List[str] = []
-    # for state in counties:
-    #     links.append(state.get_link())
-    #     for county in counties[state]:
-    #         links.append(county.get_link())
-    # for link in links:
-    #     print(link)
-
-
-    # input()
-    # link_tree = find_link_tree(ROOT_URL + "/United-States/Overview")
-    # for link in link_tree:
-    #     print(link)
-    # input()
-    # soup = get_soup(ROOT_URL + "/United-States/Overview")
-    # #print(soup.prettify())
-    # # Get all the urls linked to by this page
-    # links = get_links(soup)
-    # for link in links:
-    #     if 'county/' in link: # type: ignore
-    #         print(absolute_url(link))
-    #         print(link.split("/")[-2].replace("-"," ")) # type: ignore
-
-    # for state in STATES:
-    #     print(state.name)
+    add_states_to_jsons()
 
 if __name__ == "__main__":
     main()

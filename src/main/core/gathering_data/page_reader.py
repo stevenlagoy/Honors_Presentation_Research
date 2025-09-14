@@ -6,6 +6,10 @@ from Paths import ROOT_URL
 from State import State
 from County import County
 
+def fetch_and_save(url, filepath):
+    soup = get_soup(url)
+    with open(filepath, 'w', encoding='utf-8') as out:
+        out.write(soup.prettify())
 
 def get_soup(url: str) -> BeautifulSoup:
     ''' Get BeautifulSoup for a url. '''
