@@ -22,7 +22,7 @@ def initialize():
         state.descriptors.append(Descriptor(state.name.lower().replace(" ","_"), {}, True))
     # Initialize all other descriptors
     for i in range(DESCRIPTORS_MAX):
-        descriptors.append(Descriptor(f"Descriptor {i}", {}))
+        descriptors.add(Descriptor(f"Descriptor {i}", {}))
 
 # favor descriptors which reflect real life - Accuracy
 accuracy = 2.0 # Accuracy of 2x is 1 plus this many times better than Accuracy of 1x
@@ -167,7 +167,7 @@ def permute() -> Change:
         # Choose whether to add or remove descriptor
         if randint(0,1): # Add
             # Choose a descriptor to add
-            descriptor: Descriptor = choice(descriptors)
+            descriptor: Descriptor = choice(list(descriptors))
             if descriptor.fixed:
                 return permute() # Cannot change the descriptor: try again
             # Add it to the entity's descriptors
@@ -199,7 +199,7 @@ def permute() -> Change:
             return Change(undo)
     else: # Add, remove, or change a descriptor's effect
         # Pick a descriptor
-        descriptor: Descriptor = choice(descriptors)
+        descriptor: Descriptor = choice(list(descriptors))
         # Choose an effect to change
         effect: str = choice([_ for _ in descriptor.effects.keys()])
         # Determine how much to change by
@@ -222,7 +222,6 @@ def run():
     prev_score = score()
 
     while True:
-
         change = permute()
         new_score = score()
         print(f"{new_score}")

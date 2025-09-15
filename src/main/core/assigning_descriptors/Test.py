@@ -1,17 +1,21 @@
 from typing import List, Dict
 import numpy as np
 from random import choice, random
+import os
 
 from County import County, counties
 from Descriptor import Descriptor, descriptors
 
+MAX_DESCRIPTORS = 300 # Max # of descriptors (including fixed Nation and State descriptors)
 def initialize():
-    # Assign base descriptors to each county
+    ''' Assign base descriptors (nation, state) to each county, and create blank descriptors up to MAX_DESCRIPTORS. '''
     nation = Descriptor("Nation", fixed=True)
     for county in counties:
         county.descriptors.append(nation)
         county.descriptors.append(Descriptor(county.state, fixed=True))
         score_county(county)
+    while len(descriptors) < MAX_DESCRIPTORS:
+        Descriptor(f"Descriptor {len(descriptors)}")
 
 def normalize(vec: List[float]) -> List[float]:
     ''' Normalize a positive vector of any length. '''
@@ -29,6 +33,8 @@ def compare_demographics(expected: Dict[str, float], actual: Dict[str, float], m
     a = normalize(a)
 
     if method == "l1": # L1 Norm - Sum of absolute differences (Manhattan Distance)
+        if sum(a) == 0 and sum(e) != 0:
+            return 0.0
         dist = sum(abs(x - y) for x, y in zip(e, a))
         return 1 - dist / 2 # Normalize to [0, 1]
         
@@ -69,13 +75,16 @@ def permute_descriptors() -> Change | None:
     # Select a descriptor to modify
     descriptor = choice(list(descriptors))
     # Select an effect in the descriptor to modify
-    effect = choice([k for k in descriptor.effects.keys()])
+    if not descriptor.effects:
+        return None
+    effect = choice(list(descriptor.effects.keys()))
     # Choose how much to modify
-    mod = random() * MAX_PERMUTE_CHANGE
+    mod = (random() - 0.5) * 2 * MAX_PERMUTE_CHANGE # Range: [-MAX_PERMUTE_CHANCE, MAX_PERMUTE_CHANCE]
     old_value = descriptor.effects[effect]
     descriptor.effects[effect] = min(1.0, max(0.0, old_value + mod)) # Clamp to [0.0, 1.0]
     for county in counties:
         if descriptor in county.descriptors:
+            county.recalculate = True
             score_county(county)
     def undo():
         descriptor.effects[effect] = old_value
@@ -84,23 +93,67 @@ def permute_descriptors() -> Change | None:
                 score_county(county)
     return Change(undo)
 
+def permute_counties() -> Change | None:
+    if len(counties) == 0:
+        return None
+    # Select a county to modify
+    county = choice(counties)
+    # Select a modifiable descriptor
+    descriptor = choice([_ for _ in descriptors if not _.fixed])
+    if descriptor in county.descriptors:
+        county.descriptors.remove(descriptor)
+        county.recalculate = True
+    else:
+        county.descriptors.append(descriptor)
+        county.recalculate = True
+    def undo():
+        if descriptor in county.descriptors:
+            county.descriptors.remove(descriptor)
+            county.recalculate = True
+        else:
+            county.descriptors.append(descriptor)
+            county.recalculate = True
+    return Change(undo)
+    
+
+top_score: int = 0
 counties_scores = {county: 0.0 for county in counties}    
 def score_county(county: County) -> float:
-    counties_scores[county] = compare_demographics(county.demographics, county.descriptor_demographics(), "l1")
-    return counties_scores[county]
+    county_score = compare_demographics(county.demographics, county.descriptor_demographics(), "l1")
+    counties_scores[county] = county_score
+    return county_score
 
 def score() -> float:
-    return sum([v for v in counties_scores.values()]) / len(counties_scores)
+    if not counties_scores:
+        return 0.0
+    avg_score = sum(counties_scores.values()) / len(counties_scores)
+    return avg_score
 
 def run():
+    prev_score = 0
     while True:
-        permute_descriptors()
-        print(score())
+        change = permute_descriptors()
+        new_score = score()
+        if change and prev_score > new_score:
+            change.undo()
+            # print("Undone!")
+        else:
+            prev_score = new_score
+            print(new_score)
+
+        change = permute_counties()
+        new_score = score()
+        if change and prev_score > new_score:
+            change.undo()
+        else:
+            prev_score = new_score
+            print(new_score)
 
 def write_output():
+    os.makedirs("logs", exist_ok=True)
     with open("logs\\log.out",'w',encoding='utf-8') as out:
         for county in counties:
-            out.write(str(county) + "\n")
+            out.write(f"{county.name}, {county.state}: {[d.name for d in county.descriptors]}\n")
         for descriptor in descriptors:
             out.write(str(descriptor) + "\n")
 

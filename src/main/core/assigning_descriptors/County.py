@@ -14,13 +14,12 @@ class County:
         for d in [_ for _ in self.demographics if _ not in demos]:
             demos.append(d)
         self.descriptors: List[Descriptor] = descriptors
-        self.prev_desc = demographics
+        self.recalculate = True
         self._desc_demos: Dict[str, float] | None = None
     
     def descriptor_demographics(self) -> Dict[str, float]:
-        if self._desc_demos is not None and self.prev_desc == self.descriptors:
+        if self._desc_demos and not self.recalculate:
             return self._desc_demos
-        self.prev_desc = self.descriptors
         self._desc_demos = {}
         for descriptor in self.descriptors:
             for demographic in descriptor.effects:
