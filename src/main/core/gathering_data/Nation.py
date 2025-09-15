@@ -3,7 +3,7 @@ from typing import Dict, Any
 from MapEntity import MapEntity
 
 class Nation(MapEntity):
-    def __init__(self, name: str, population: int, demographics: Dict[str, float]):
+    def __init__(self, name: str, population: int, demographics: Dict[str, Dict[str, Any]]):
         super().__init__(name, population, demographics)
 
     def __str__(self) -> str:

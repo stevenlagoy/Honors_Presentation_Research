@@ -1,15 +1,8 @@
-from typing import List, Dict, Set, Tuple, Any
+from typing import List, Set
 from bs4 import BeautifulSoup
 import requests
 
 from Paths import ROOT_URL
-from State import State
-from County import County
-
-def fetch_and_save(url, filepath):
-    soup = get_soup(url)
-    with open(filepath, 'w', encoding='utf-8') as out:
-        out.write(soup.prettify())
 
 def get_soup(url: str) -> BeautifulSoup:
     ''' Get BeautifulSoup for a url. '''
@@ -50,7 +43,6 @@ def find_link_tree(start_url: str) -> Set[str]:
             link_queue.append(sublink)
         i += 1
     return set(link_queue)
-
 
 def get_links(soup: BeautifulSoup) -> List[str]:
     ''' Get all links (<a href=""> tags) on the page. '''

@@ -1,20 +1,11 @@
-from typing import List, Dict, Set, Tuple, Any
-import requests
-from bs4 import BeautifulSoup
-from bs4.element import PageElement, Tag
+from typing import List
 import os
 import json
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
-import shutil
 
 from Paths import *
-from Nation import Nation
-from State import State
-from County import County
-from page_reader import get_soup, identify_states, identify_counties, fetch_and_save
-from MapEntityFactory import create_all_counties_from_files, create_all_counties_in_state_from_files, create_state_from_files, create_county_from_files, create_nation_from_files
-
+from page_reader import get_soup, identify_states, identify_counties
+from MapEntityFactory import create_state_from_files, create_county_from_files, create_nation_from_files
 
 def webpages_to_files():
     ''' Read state data into files in resources\\data for quicker access later. '''
@@ -185,8 +176,8 @@ def verify_data():
     for file in unremovable_files:
         print(file)
 
-
 def validate_json():
+    ''' Check that all json data files contian the necessary objects. '''
     bad_files: List[str] = []
     required_lines = ["name", "population", "demographics", "race_and_ethnicity", "age_and_sex", "household_types", "marital_status", "employment_status", "industries", "educational_attainment"]
     for file in list_files_recursive(RESOURCES_DIR):
@@ -228,6 +219,8 @@ def add_states_to_jsons():
             content: List[str] = []
             with open(f"{RESOURCES_DIR}\\{state_dir}\\counties\\{county_file}",'r') as data:
                 content = data.readlines()
+            if "\"state\"" in "\n".join(content):
+                continue
             for i, line in enumerate(content):
                 if "\"name\"" in line:
                     content.insert(i+1, f"\t\"state\" : \"{state_name}\", \n")
@@ -238,16 +231,22 @@ def add_states_to_jsons():
 
 def main() -> None:
 
-    # webpages_to_files()
+    # Gather all webpages
+    webpages_to_files()
 
-    # verify_data()
+    # Verify downloaded webpage files, and delete any invalid
+    verify_data()
 
-    # convert_html_json_files()
+    # Convert downloaded pages into json files
+    convert_html_json_files()
 
-    # validate_json()
+    # Validate the json files
+    validate_json()
 
-    # count_counties()
+    # Count the counties in each state
+    count_counties()
 
+    # Add state names to the json files
     add_states_to_jsons()
 
 if __name__ == "__main__":
