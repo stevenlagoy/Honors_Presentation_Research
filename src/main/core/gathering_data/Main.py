@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict
 import os
 import json
 import time
@@ -179,7 +179,7 @@ def verify_data():
 def validate_json():
     ''' Check that all json data files contian the necessary objects. '''
     bad_files: List[str] = []
-    required_lines = ["name", "population", "demographics", "race_and_ethnicity", "age_and_sex", "household_types", "marital_status", "employment_status", "industries", "educational_attainment"]
+    required_lines = ["name", "FIPS", "population", "demographics", "race_and_ethnicity", "age_and_sex", "household_types", "marital_status", "employment_status", "industries", "educational_attainment"]
     for file in list_files_recursive(RESOURCES_DIR):
         has_required: List[bool] = [False for _ in required_lines]
         content: List[str] = []
@@ -229,6 +229,134 @@ def add_states_to_jsons():
                 for line in content:
                     data.write(line)
 
+def add_fips_to_jsons():
+
+    fips: Dict[str, str] = {}
+    with open("src/main/core/gathering_data/counties.json",'r',encoding='utf-8') as c:
+        counties_lines = c.readlines()
+    for i, line in enumerate(counties_lines[1:]):
+        if "{" in line:
+            name = line.split(":")[0].replace("\"",'').replace(".",'').strip().title().replace("ö","o")
+            code = counties_lines[1:][i+2].split(":")[1].replace("\"",'').replace(",",'').strip()
+            fips[name] = code
+    with open("src/main/core/gathering_data/state_fips.txt",'r',encoding='utf-8') as s:
+        states_lines = s.readlines()
+    for line in states_lines:
+        name = line.split(" ")[0].title().replace("_"," ").strip()
+        code = line.split(" ")[1].strip()
+        fips[name] = code
+
+    special = {
+        "Anchorage Municipality" : "Municipality Of Anchorage",
+        "Hoonah Angoon Census Area" : "Hoonah-Angoon Census Area",
+        "Juneau City And Borough" : "City And Borough Of Juneau",
+        "Matanuska Susitna Borough" : "Matanuska-Susitna Borough",
+        "Prince Of Wales Hyder Census Area" : "Prince Of Wales-Hyder Census Area",
+        "Sitka City And Borough" : "City And Borough Of Sitka",
+        "Skagway Municipality" : "Municipality And Borough Of Skagway",
+        "Valdez Cordova Census Area" : "Chugach Census Area",
+        "Wrangell City And Borough" : "City And Borough Of Wrangell",
+        "Yakutat City And Borough" : "City And Borough Of Yakutat",
+        "Yukon Koyukuk Census Area" : "Yukon-Koyukuk Census Area",
+        "Miami Dade County" : "Miami-Dade County",
+        "De Witt County" : "Dewitt County",
+        "Obrien County" : "O'Brien County",
+        "De Soto Parish" : "Desoto Parish",
+        "Baltimore City" : "Baltimore Independent City",
+        "Prince Georges County" : "Prince George'S County",
+        "Queen Annes County" : "Queen Anne'S County",
+        "St Marys County" : "St Mary'S County",
+        "St Louis City" : "St Louis Independent City",
+        "Carson City" : "Carson Independent City",
+        "Doã±A Ana County" : "Doña Ana County",
+        "Le Flore County" : "Leflore County",
+        "Alexandria City" : "Alexandria Independent City",
+        "Bristol City" : "Bristol Independent City",
+        "Buena Vista City" : "Buena Vista Independent City",
+        "Charlottesville City" : "Charlottesville Independent City",
+        "Chesapeake City" : "Chesapeake Independent City",
+        "Colonial Heights City" : "Colonial Heights Independent City",
+        "Covington City" : "Covington Independent City",
+        "Colonial Heights City" : "Colonial Heights Independent City",
+        "Danville City" : "Danville Independent City",
+        "Emporia City" : "Emporia Independent City",
+        "Fairfax City" : "Fairfax Independent City",
+        "Falls Church City" : "Falls Church Independent City",
+        "Franklin City" : "Franklin Independent City",
+        "Fredericksburg City" : "Fredericksburg Independent City",
+        "Galax City" : "Galax Independent City",
+        "Hampton City" : "Hampton Independent City",
+        "Hampton City" : "Hampton Independent City",
+        "Harrisonburg City" : "Harrisonburg Independent City",
+        "Hopewell City" : "Hopewell Independent City",
+        "Lexington City" : "Lexington Independent City",
+        "Lynchburg City" : "Lynchburg Independent City",
+        "Manassas City" : "Manassas Independent City",
+        "Manassas Park City" : "Manassas Park Independent City",
+        "Martinsville City" : "Martinsville Independent City",
+        "Newport News City" : "Newport News Independent City",
+        "Norfolk City" : "Norfolk Independent City",
+        "Norton City" : "Norton Independent City",
+        "Petersburg City" : "Petersburg Independent City",
+        "Poquoson City" : "Poquoson Independent City",
+        "Portsmouth City" : "Portsmouth Independent City",
+        "Radford City" : "Radford Independent City",
+        "Richmond City" : "Richmond Independent City",
+        "Roanoke City" : "Roanoke Independent City",
+        "Salem City" : "Salem Independent City",
+        "Staunton City" : "Staunton Independent City",
+        "Suffolk City" : "Suffolk Independent City",
+        "Virginia Beach City" : "Virginia Beach Independent City",
+        "Waynesboro City" : "Waynesboro Independent City",
+        "Williamsburg City" : "Williamsburg Independent City",
+        "Winchester City" : "Winchester Independent City",
+    }
+
+    data_files = list_files_recursive(RESOURCES_DIR);
+    for data_file in data_files:
+        state_name = data_file.split("\\")[-3].replace("_"," ").title()
+        if state_name == "Main":
+            pass
+        elif state_name == "Resources":
+            state_name = data_file.split("\\")[-1].replace(".json",'').replace("_"," ").title()
+            code = fips[state_name]
+            with open(data_file,'r',encoding='utf-8') as data:
+                content = data.readlines()
+            content.insert(2, "\t\"FIPS\" : \"" + code + "\",\n")
+            with open(data_file,'w',encoding="utf-8") as out:
+                for line in content:
+                    out.write(line)
+        else:
+            county_name = data_file.split("\\")[-1].replace(".json",'').replace("_"," ").title()
+            if county_name in special:
+                county_name = special[county_name]
+            fullname = county_name + ", " + state_name
+            code = fips[fullname]
+            with open(data_file,'r',encoding='utf-8') as data:
+                content = data.readlines()
+            content.insert(3, "\t\"FIPS\" : \"" + code + "\",\n")
+            with open(data_file,'w',encoding="utf-8") as out:
+                for line in content:
+                    out.write(line)
+
+def rename_jsons_to_fips():
+    data_files = list_files_recursive(RESOURCES_DIR)
+    for data_file in data_files:
+        # Get FIPS code from file
+        code: str = ""
+        content: List[str] = []
+        with open(data_file, 'r', encoding='utf-8') as data:
+            content = data.readlines()
+        for line in content:
+            if 'FIPS' in line:
+                code = line.split(":")[-1].replace(",","").replace("\"","").strip()
+                break
+        if code:
+            path = "\\".join(data_file.split("\\")[:-1]) + "\\"
+            with open(path + code + ".json",'w',encoding='utf-8') as out:
+                for line in content:
+                    out.write(line)
+
 def main() -> None:
 
     # Gather all webpages
@@ -248,6 +376,12 @@ def main() -> None:
 
     # Add state names to the json files
     add_states_to_jsons()
+
+    # Add FIPS codes to the json files
+    add_fips_to_jsons()
+
+    # Generate files with FIPS codes as names
+    rename_jsons_to_fips()
 
 if __name__ == "__main__":
     main()
