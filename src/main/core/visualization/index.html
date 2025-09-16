@@ -1,103 +1,28 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>US States and Counties Map</title>
-  <meta charset="utf-8" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-  <style>
-    #map { height: 600px; }
-    button { margin: 10px; }
-    #infobox {
-        margin: 10px;
-        padding: 10px;
-        border: 1px solid #ccc;
-        background: #f8f8f8;
-        font-family: sans-serif;
-    }
-  </style>
+    <title>US Demographic Visualizer</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/topojson-client@3"></script>
+    <script src="main.js" defer></script>
 </head>
 <body>
-  <button onclick="resetView()">Reset</button>
-  <div id="map"></div>
-
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/topojson-client@3"></script>
-  <script>
-    const map = L.map('map').setView([37.8, -96], 4);
-
-    // Basemap
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 10
-    }).addTo(map);
-
-    let selectedLayer = null; // Track highlighted area
-
-    fetch("us-states.json")
-        .then(res => res.json())
-        .then(topoData => {
-        const counties = topojson.feature(topoData, topoData.objects.counties);
-        L.geoJSON(counties, {
-            style: style,
-            onEachFeature: onEachFeature
-        }).addTo(map);
-    });
-
-    function style(feature) {
-      return {
-        fillColor: "#cccccc",
-        weight: 1,
-        opacity: 1,
-        color: "#333",
-        fillOpacity: 0.6,
-        interactive: true // <-- make sure polygons can be clicked
-      };
-    }
-
-    function highlightFeature(e) {
-        const props = e.target.feature.properties;
-        const id = props.name.toLowerCase().replace(" ", "_") + "_county";
-        console.log(props)
-        const state = props.state.toLowerCase().replace(" ","_")
-        fetch(`data/${state}/counties/${id}.json`)
-            .then(r => r.json())
-            .then(info => {
-                document.getElementById("infobox").innerHTML = `
-                    <b>${id} County</b><br>
-                    Population: ${info.Population}<br>
-                    Demographics: ${info.Demographics}
-                `;
-            });
-
-        if (selectedLayer) {
-            Object.values(selectedLayer._eventParents).forEach(parent => {
-                if (parent.resetStyle) parent.resetStyle(selectedLayer);
-            });
-        }
-
-        selectedLayer = e.target;
-        selectedLayer.setStyle({
-            weight: 3,
-            color: "#ff7800",
-            fillOpacity: 0.5
-        });
-        selectedLayer.bringToFront();
-    }
-    
-    function onEachFeature(feature, layer) {
-      layer.on({
-        click: highlightFeature
-      });
-    }
-
-    function resetView() {
-      map.setView([37.8, -96], 4); // reset to default center & zoom
-      if (selectedLayer) {
-        geojsonStates.resetStyle(selectedLayer);
-        geojsonCounties.resetStyle(selectedLayer);
-        selectedLayer = null;
-      }
-      console.log(countyData)
-    }
-  </script>
+    <header>
+        <h1>US Demographic Visualizer</h1>
+    </header>
+    <main>
+        <div id="map"></div>
+        <div id="infobox">Click on a county-equivalent to see demographic details.</div>
+        <button id="reset-button">Reset View</button>
+    </main>
+    <footer>
+        <p>Made by <a id="profile" href="https://stevenlagoy.github.io/">Steven LaGoy</a></p>
+        <p>Purdue University Fort Wayne</p>
+        <p>Fall 2025</p>
+    </footer>
 </body>
 </html>
