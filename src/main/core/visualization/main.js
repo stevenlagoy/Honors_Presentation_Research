@@ -118,8 +118,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
         });
 
-    function getColor(value, relative = false) {
-        if (relative) {
+    function getColor(value, mode = "relative") {
+        if (mode === "relative") {
             return value > 2.0 ? "#800026" :
                    value > 1.5 ? "#BD0026" :
                    value > 1.2 ? "#E31A1C" :
@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
                    value > 0.5 ? "#FEB24C" :
                                  "#FFEDA0" ; 
         }
-        else {
+        else if (mode === "raw") {
             return value > 0.95 ? "#520016" :
                    value > 0.85 ? "#680020" :
                    value > 0.75 ? "#800026" :
@@ -138,6 +138,22 @@ document.addEventListener('DOMContentLoaded', () => {
                    value > 0.05 ? "#FD8D3C" : 
                    value > 0.01 ? "#FEB24C" : 
                                   "#FFEDA0" ;
+        }
+        else if (mode === "count") {
+            return value > 800000 ? "#001900" :
+                   value > 400000 ? "#002600" :
+                   value > 100000 ? "#003300" :
+                   value > 50000  ? "#0D4D0D" :
+                   value > 25000  ? "#1A661A" :
+                   value > 10000  ? "#268026" :
+                   value > 5000   ? "#339933" :
+                   value > 2500   ? "#4DB34d" :
+                   value > 1000   ? "#80D580" :
+                   value > 500    ? "#99DD99" :
+                   value > 250    ? "#B2E5B2" :
+                   value > 100    ? "#CCEECC" :
+                   value > 0      ? "#E6F7E6" :
+                                    "#FFFFFF" ;
         }
     }
 
@@ -156,6 +172,27 @@ document.addEventListener('DOMContentLoaded', () => {
             case "One-Person" : 
             case "Other Non-Family" :
                 return "household_types";
+            case "Healthcare" :
+            case "Retail" :
+            case "Manufacturing" :
+            case "Education" :
+            case "Hospitality" :
+            case "Professional" :
+            case "Construction" :
+            case "Other Services" :
+            case "Government" :
+            case "Finance & Insurance" :
+            case "Administrative" :
+            case "Transportation" :
+            case "Wholesalers" :
+            case "Entertainment" :
+            case "Information" :
+            case "Real estate" :
+            case "Agriculture" :
+            case "Utilities" :
+            case "Oil & Gas, and Mining" :
+            case "Management" :
+                return "industries";
             case "Doctorate" :
             case "Professional" :
             case "Master's" :
@@ -182,7 +219,6 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         }
 
-        console.log(feature.properties.demographics["household_types"]);
         const countyPercent = feature.properties.demographics[getDemographicCategory(selectedDemographic)][selectedDemographic] || 0;
         
         let colorValue;
@@ -190,12 +226,14 @@ document.addEventListener('DOMContentLoaded', () => {
             colorValue = countyPercent;
         }
         else if (shadingMode === "relative") {
-            console.log(nationalAverages);
             const nationalPercent = nationalAverages[getDemographicCategory(selectedDemographic)][selectedDemographic] || 0.0001;
             colorValue = countyPercent / nationalPercent;
         }
+        else if (shadingMode === "count") {
+            colorValue = countyPercent * feature.properties.population;
+        }
         return {
-            fillColor: getColor(colorValue, shadingMode === "relative"),
+            fillColor: getColor(colorValue, shadingMode),
             weight: 1,
             opacity: 1,
             color: "#333",
@@ -320,7 +358,7 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedLayer = null;
         }
         // Reset infobox text
-        document.getElementById("infobox").innerHTML = "Click on a county-equivalent to see demographic details.";
+        document.getElementById("infobox").innerHTML = "Click on a county or county-equivalent to see demographic details.";
     }
 
     let legend = L.control({ position: 'bottomleft' });
@@ -334,18 +372,35 @@ document.addEventListener('DOMContentLoaded', () => {
     let legendAdded = false;
 
     function updateLegend(div) {
-        const grades = shadingMode === "relative" 
-            ? [0.50, 0.80, 1.0, 1.2, 1.5, 2]
-            : [0.0, 0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.85, 0.95];
+        let grades = [];
+        if (shadingMode === "relative") 
+            grades = [0.50, 0.80, 1.0, 1.2, 1.5, 2]
+        else if (shadingMode === "raw")
+            grades = [0.0, 0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.85, 0.95];
+        else if (shadingMode === "count")
+            grades = [0, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000, 4000000, 800000];
 
         div.innerHTML = '';
         for (let i = 0; i < grades.length; i++) {
             const from = grades[i];
             const to = grades[i + 1];
-            div.innerHTML +=
-                `<i style="background:${getColor(from + 0.001, shadingMode==='relative')}"></i> ` +
-                from.toFixed(2) * 100 + `%` + (to ? ` &ndash; ${to.toFixed(2) * 100}%${shadingMode==='relative' ? " of US Average" : ""}<br>` :
-                    `+${shadingMode==='relative' ? " of US Average" : ""}`);
+            if (shadingMode === "relative") {
+                div.innerHTML +=
+                `<i style="background:${getColor(from + 0.001, shadingMode)}"></i> ` +
+                from.toFixed(2) * 100 + `%` + (to ? ` &ndash; ${to.toFixed(2) * 100}% of US Average<br>` :
+                    `+ of US Average`);
+            }
+            else if (shadingMode === "raw") {
+                div.innerHTML +=
+                `<i style="background:${getColor(from + 0.001, shadingMode)}"></i> ` +
+                from.toFixed(2) * 100 + `%` + (to ? ` &ndash; ${to.toFixed(2) * 100}%<br>` :
+                    `+`);
+            }
+            else if (shadingMode === "count") {
+                div.innerHTML +=
+                `<i style="background:${getColor(from + 0.001, shadingMode)}"></i> ` +
+                from + (to ? ` &ndash; ${to} people<br>` : `+ people`);
+            }
         }
     }    
 
