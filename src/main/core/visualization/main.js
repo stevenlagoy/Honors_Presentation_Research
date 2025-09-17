@@ -76,37 +76,153 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let geojsonCounties = null;
 
-    fetch("us-states.json")
+    let shadingMode = "raw";
+
+    let nationalAverages = {};
+
+    let selectedDemographic = null;
+
+    document.getElementById("scale-select").addEventListener("change", e => {
+        shadingMode = e.target.value;
+        if (geojsonCounties) geojsonCounties.setStyle(style);
+
+        const legendDiv = document.querySelector('.legend');
+        if (legendDiv) updateLegend(legendDiv);
+    });
+
+    fetch("counties.json")
         .then(res => res.json())
-        .then(topoData => {
-            const counties = topojson.feature(topoData, topoData.objects.counties);
-            console.log(counties.features);
-            counties.features.forEach(f => {
-                const fp = f.id.substring(0, 2);
-                f.properties.state = stateLookup[fp];
-            });
-            geojsonCounties = L.geoJSON(counties, {
-                style: style,
-                onEachFeature: onEachFeature
-            }).addTo(map);
+        .then(countyData => {
+
+            // Compute national averages
+            fetch("nation.json")
+                .then(res => res.json())
+                .then(data => {
+                    nationalAverages = data.demographics;
+                    // Load geometries
+                    fetch("us-states.json")
+                        .then(res => res.json())
+                        .then(topoData => {
+                            const counties = topojson.feature(topoData, topoData.objects.counties);
+                            // Attach demographics
+                            counties.features.forEach(f => {
+                                f.properties.demographics = countyData[f.id]?.demographics || null;
+                                f.properties.name = countyData[f.id]?.name || "";
+                                f.properties.population = countyData[f.id]?.population || 0;
+                                const fp = f.id.substring(0, 2);
+                                f.properties.state = stateLookup[fp];
+                            });
+                            // Add GeoJSON layer
+                            geojsonCounties = L.geoJSON(counties, { style, onEachFeature }).addTo(map);
+                        });
+                });
         });
 
+    function getColor(value, relative = false) {
+        if (relative) {
+            return value > 2.0 ? "#800026" :
+                   value > 1.5 ? "#BD0026" :
+                   value > 1.2 ? "#E31A1C" :
+                   value > 1.0 ? "#FC4E2A" :
+                   value > 0.8 ? "#FD8D3C" :
+                   value > 0.5 ? "#FEB24C" :
+                                 "#FFEDA0" ; 
+        }
+        else {
+            return value > 0.95 ? "#520016" :
+                   value > 0.85 ? "#680020" :
+                   value > 0.75 ? "#800026" :
+                   value > 0.50 ? "#BD0026" : 
+                   value > 0.25 ? "#E31A1C" : 
+                   value > 0.10 ? "#FC4E2A" : 
+                   value > 0.05 ? "#FD8D3C" : 
+                   value > 0.01 ? "#FEB24C" : 
+                                  "#FFEDA0" ;
+        }
+    }
+
+    function getDemographicCategory(demo) {
+        switch (demo) {
+            case "White" : 
+            case "Black" : 
+            case "Hispanic" : 
+            case "Asian" :
+            case "Mixed" :
+            case "Other" :
+                return "race_and_ethnicity";
+            case "Married" :
+            case "Single Female" :
+            case "Single Male" :
+            case "One-Person" : 
+            case "Other Non-Family" :
+                return "household_types";
+            case "Doctorate" :
+            case "Professional" :
+            case "Master's" :
+            case "Bachelor's" :
+            case "Associate's" :
+            case "Some College" :
+            case "High School" :
+            case "Some H.S." :
+            case "Less than H.S." :
+            case "None" :
+                return "educational_attainment";
+        }
+    }
+
     function style(feature) {
+        if (!selectedDemographic || !feature.properties.demographics) {
+            return {
+                fillColor: "#cccccc",
+                weight: 1,
+                opacity: 1,
+                color: "#333",
+                fillOpacity: 0.6,
+                interactive: true // <-- make sure polygons can be clicked
+            };
+        }
+
+        console.log(feature.properties.demographics["household_types"]);
+        const countyPercent = feature.properties.demographics[getDemographicCategory(selectedDemographic)][selectedDemographic] || 0;
+        
+        let colorValue;
+        if (shadingMode === "raw") {
+            colorValue = countyPercent;
+        }
+        else if (shadingMode === "relative") {
+            console.log(nationalAverages);
+            const nationalPercent = nationalAverages[getDemographicCategory(selectedDemographic)][selectedDemographic] || 0.0001;
+            colorValue = countyPercent / nationalPercent;
+        }
         return {
-            fillColor: "#cccccc",
+            fillColor: getColor(colorValue, shadingMode === "relative"),
             weight: 1,
             opacity: 1,
             color: "#333",
-            fillOpacity: 0.6,
-            interactive: true // <-- make sure polygons can be clicked
+            fillOpacity: 0.7
         };
     }
 
-    function normalizeName(str) {
-        return str.toLowerCase()
-                  .replace(/\s+/g, "_")
-                  .replace(/[^\w_]/g, "") 
-    }
+    document.getElementById("demographic-select").addEventListener("change", (e) => {
+        selectedDemographic = e.target.value;
+        if (geojsonCounties) geojsonCounties.setStyle(style);
+
+        if (selectedDemographic) {
+            if (!legendAdded) {
+                legend.addTo(map);
+                legendAdded = true;
+            }
+            else {
+                const legendDiv = document.querySelector('.legend');
+                if (legendDiv) updateLegend(legendDiv);
+            }
+        }
+        else if (legendAdded) {
+            // Remove legend if nothing selected
+            legend.remove();
+            legendAdded = false;
+        }
+    });
 
     function formatDemographics(demo) {
         let html = '';
@@ -130,21 +246,6 @@ document.addEventListener('DOMContentLoaded', () => {
             html += '</ul>';
         }
         return html;
-    }
-
-    function getCountyFileName(countyName, state) {
-        console.log(countyName);
-        const base = normalizeName(countyName);
-        let suffix = "_county"; // default
-
-        if (state === "louisiana") {
-            suffix = "_parish";
-        }
-        else if (state === "alaska") {
-            if (countyName.toLowerCase().includes("borough")) suffix = "_borough";
-            else if (countyName.toLowerCase().includes("census area")) suffix = "_census_area";
-        }
-        return base + suffix + ".json";
     }
 
     function highlightFeature(e) {
@@ -171,7 +272,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     ${formatDemographics(data.demographics)}
                 `;
                 infobox.scrollTop = 0;
-                console.log(document.getElementById("infobox").innerHTML);
             })
             .catch(err => console.error("Failed to load county JSON", err));
 
@@ -198,13 +298,55 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function resetView() {
+        // Reset camera
         map.setView(center, 4); // reset to default center & zoom
-        if (selectedLayer && geojsonCounties) {
+        // Reset demographic select
+        const select = document.getElementById("demographic-select");
+        if (select) {
+            select.value = "";
+            select.dispatchEvent(new Event('change'));
+        }
+        selectedDemographic = "";
+        // Remove fill colors
+        if (geojsonCounties) {
+            geojsonCounties.setStyle(() => ({
+                fillColor: "#cccccc",
+                weight: 1,
+                opacity: 1,
+                color: "#333",
+                fillOpacity: 0.6
+            }));
             geojsonCounties.resetStyle(selectedLayer);
             selectedLayer = null;
         }
+        // Reset infobox text
         document.getElementById("infobox").innerHTML = "Click on a county-equivalent to see demographic details.";
-        console.log(countyData)
     }
+
+    let legend = L.control({ position: 'bottomleft' });
+
+    legend.onAdd = function(map) {
+        const div = L.DomUtil.create('div', 'info legend');
+        updateLegend(div); // initial
+        return div;
+    };
+
+    let legendAdded = false;
+
+    function updateLegend(div) {
+        const grades = shadingMode === "relative" 
+            ? [0.50, 0.80, 1.0, 1.2, 1.5, 2]
+            : [0.0, 0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.85, 0.95];
+
+        div.innerHTML = '';
+        for (let i = 0; i < grades.length; i++) {
+            const from = grades[i];
+            const to = grades[i + 1];
+            div.innerHTML +=
+                `<i style="background:${getColor(from + 0.001, shadingMode==='relative')}"></i> ` +
+                from.toFixed(2) * 100 + `%` + (to ? ` &ndash; ${to.toFixed(2) * 100}%${shadingMode==='relative' ? " of US Average" : ""}<br>` :
+                    `+${shadingMode==='relative' ? " of US Average" : ""}`);
+        }
+    }    
 
 });
