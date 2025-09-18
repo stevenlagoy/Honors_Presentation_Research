@@ -90,6 +90,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (legendDiv) updateLegend(legendDiv);
     });
 
+    let countyIndex;
+
+    window.addEventListener("resize", () => map.invalidateSize());
+
     fetch("counties.json")
         .then(res => res.json())
         .then(countyData => {
@@ -114,19 +118,30 @@ document.addEventListener('DOMContentLoaded', () => {
                             });
                             // Add GeoJSON layer
                             geojsonCounties = L.geoJSON(counties, { style, onEachFeature }).addTo(map);
+                            // Build lookup list
+                            countyIndex = counties.features.map(f => {
+                                const stateName = f.properties.state
+                                    ? toTitleCase(f.properties.state.replace(/_/g, " "))
+                                    : "Unknown";
+                                return {
+                                    name: f.properties.name || "Unknown",
+                                    state: stateName,
+                                    fips: f.id
+                                };
+                            });
                         });
                 });
         });
 
     function getColor(value, mode = "relative") {
         if (mode === "relative") {
-            return value > 2.0 ? "#800026" :
-                   value > 1.5 ? "#BD0026" :
-                   value > 1.2 ? "#E31A1C" :
-                   value > 1.0 ? "#FC4E2A" :
-                   value > 0.8 ? "#FD8D3C" :
-                   value > 0.5 ? "#FEB24C" :
-                                 "#FFEDA0" ; 
+            return value > 2.0 ? "#260080" :
+                   value > 1.5 ? "#2600BD" :
+                   value > 1.2 ? "#1C1AE3" :
+                   value > 1.0 ? "#2A4EFC" :
+                   value > 0.8 ? "#3C8DFD" :
+                   value > 0.5 ? "#4CB2FE" :
+                                 "#A0EDFF" ; 
         }
         else if (mode === "raw") {
             return value > 0.95 ? "#520016" :
@@ -261,6 +276,32 @@ document.addEventListener('DOMContentLoaded', () => {
             legendAdded = false;
         }
     });
+
+    document.getElementById("search-form").addEventListener("submit", e => {
+        e.preventDefault(); // stop page reload
+        const query = searchInput.value.trim().replaceAll(/[.,'-\s]/g,"").toLowerCase();
+        if (!query) return;
+
+        // Find the county feature by name
+        const match = countyIndex.find(c => 
+            (c.name + " " + c.state).toLowerCase() === query
+        );
+
+        if (match) {
+            zoomToCounty(match.fips);
+        }
+        else {
+            alert("No county found matching: " + query);
+        }
+    });
+
+    function zoomToCounty(fips) {
+        const match = geojsonCounties.getLayers().find(layer => layer.feature.id === fips);
+        if (match) {
+            map.fitBounds(match.getBounds());
+            highlightFeature({ target: match });
+        }
+    }
 
     function formatDemographics(demo) {
         let html = '';
@@ -403,5 +444,38 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     }    
+
+    const searchInput = document.getElementById("search-input");
+    const suggestionsBox = document.getElementById("suggestions");
+
+    searchInput.addEventListener("input", () => {
+        const query = searchInput.value.trim().replaceAll(/[.,'-\s]/g,"").toLowerCase();
+        suggestionsBox.innerHTML = "";
+        if (!query) {
+            suggestionsBox.style.display = "none";
+            return;
+        }
+
+        const matches = countyIndex.filter(c => 
+            (c.name.replaceAll(/[.,'-\s]/g,"") + " " + c.state).toLowerCase().includes(query)
+        ).slice(0, 10); // limit to 10 results
+
+        if (matches.length === 0) {
+            suggestionsBox.style.display = "none";
+            return;
+        }
+
+        matches.forEach(match => {
+            const div = document.createElement("div");
+            div.textContent = `${match.name}, ${match.state}`;
+            div.addEventListener("click", () => {
+                searchInput.value = `${match.name}, ${match.state}`;
+                suggestionsBox.style.display = "none";
+                zoomToCounty(match.fips);
+            });
+            suggestionsBox.appendChild(div);
+        });
+        suggestionsBox.style.display = "block";
+    });
 
 });
