@@ -39,7 +39,7 @@ def read_counties():
     global counties
     counties = []
     for state in [s for s in os.listdir(f"src\\main\\resources") if '.' not in s]:
-        for county in [c for c in os.listdir(f"src\\main\\resources\\{state}\\counties") if '.' in c]:
+        for county in [c for c in os.listdir(f"src\\main\\resources\\{state}\\counties") if '.' in c and c.split(".")[0].isnumeric()]:
             with open(f"src\\main\\resources\\{state}\\counties\\{county}", 'r') as data:
                 j: Dict[str, Any] = json.loads(data.read())
                 counties.append(County(j['name'], state.replace('_',' ').title(), j['population'], flatten_dict(j['demographics']), []))

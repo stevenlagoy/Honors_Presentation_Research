@@ -2,6 +2,7 @@ from typing import List, Dict
 import numpy as np
 from random import choice, random
 import os
+import time
 
 from County import County, counties
 from Descriptor import Descriptor, descriptors
@@ -130,6 +131,9 @@ def score() -> float:
     return avg_score
 
 def run():
+    time_file = open("logs/times.csv","w",encoding="utf-8")
+    time_file.write("time,score\n")
+    start_time = time.time()
     prev_score = 0
     while True:
         change = permute_descriptors()
@@ -139,6 +143,8 @@ def run():
             # print("Undone!")
         else:
             prev_score = new_score
+            current_time = time.time() - start_time
+            time_file.write(str(current_time) + "," + str(new_score) + "\n")
             print(new_score)
 
         change = permute_counties()
@@ -147,6 +153,8 @@ def run():
             change.undo()
         else:
             prev_score = new_score
+            current_time = time.time() - start_time
+            time_file.write(str(current_time) + "," + str(new_score) + "\n")
             print(new_score)
 
 def write_output():
