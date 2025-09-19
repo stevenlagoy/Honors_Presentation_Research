@@ -1,5 +1,6 @@
 {
     "name" : "Arkansas County", 
+    "state" : "Arkansas",
     "population" : 18569, 
 	"FIPS" : "05001",
     "demographics" : {
